@@ -1,0 +1,48 @@
+# The board service Worker. Copy to wrangler.toml (git-ignored) and fill in your own names; README.md has the deploy steps.
+name = "my-hub-board"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# The service's own hostname: its address is board@<HUB_DOMAIN>, and the hub tells members to deliver to it here.
+# (A more specific route than the hub's wildcard for members' hostnames: Cloudflare picks the most specific.)
+routes = [
+  { pattern = "board.hub.example/*", zone_name = "hub.example" },
+]
+
+[vars]
+HUB_DOMAIN = "hub.example"
+HUB_BASE = "https://hub.example"
+# Who holds which role (a bare name is a member of this hub). Moderators read held posts, decide proposals, run the topics.
+ROLES = '{"moderator": ["mara"]}'
+# The operator's limits (these are the defaults).
+POSTS_PER_DAY = "5"          # posts and proposals per member per rolling 24 hours
+MESSAGES_PER_DAY = "10"      # discussion messages per member per day
+FILES_PER_DAY = "20"         # file uploads per member per day
+HELD_FIRST_POSTS = "2"       # a new member's first N posts wait for a moderator (0: none held; moderators' posts are never held)
+MAX_WATCHES = "5"            # discussion watches per member
+MAX_TOPICS = "0"             # cap on topics that aren't archived (0: no cap)
+
+# Secrets are not set here:
+#   wrangler secret put SERVICE_SEED   # base64url of 32 random bytes; the service's keys are derived from it (keep it: a redeploy keeps the keys)
+#   wrangler secret put ADMIN_TOKEN    # the operator's key to /v0/admin/* on this hostname (unset: that API answers 404). Not the hub's token.
+
+# Every minute: the framework's outbox (retries) and role changes, held-back discussion events; once an hour: upkeep
+# (unattached files after 1 day, topics with no post for 90 days archived, expired watches).
+[triggers]
+crons = ["* * * * *"]
+
+# The hub's Worker, so calls to the hub and to members go through it (recommended on Cloudflare: a Worker can't fetch a
+# Worker on its own zone by URL). Leave out for a hub reached over HTTPS.
+[[services]]
+binding = "HUB"
+service = "my-hub"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-hub-board"
+database_id = "<from `wrangler d1 create my-hub-board`>"
+# The Worker applies its migrations itself on first use. To apply them with wrangler instead, run `pnpm migrations` (it merges
+# the framework's and the board's files into dist/migrations) and uncomment:
+# migrations_dir = "dist/migrations"
+
+# Files are kept in D1 (base64url text, at most 700 KiB each, 4 per post), so there is no R2 binding.

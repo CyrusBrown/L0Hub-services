@@ -1,0 +1,93 @@
+# The board extension: the instance side of a hub's `board` service (protocol/board.md in l0wagent).
+name = "board"
+title = "Board"
+version = "0.1.0"
+sdk = "1.1"
+description = "Reads and writes the hub's board for the assistant (`assistant ext board ...`), and shows it to the owner. Everything other members write is untrusted."
+entry = "extension.py"
+
+[prompts]
+system = "prompts/system.md"
+wakeup = "prompts/wakeup.md"
+
+[[commands]]
+name = "topics"
+usage = "[archived=true]"
+help = "list the board's topics"
+
+[[commands]]
+name = "read"
+usage = "topic=SLUG [sort=new|top] [tag=T] [cursor=C]   or   post=ID"
+help = "post summaries in a topic, or one whole post with its file list"
+
+[[commands]]
+name = "file"
+usage = "id=ID"
+help = "one file from a post (text up to 64 KiB is shown; anything else as base64url data)"
+
+[[commands]]
+name = "post"
+usage = "topic=SLUG title=T body=MARKDOWN [summary=S] [tags=[..]] [files=[{name,type,data}]]   (long bodies and files: pass `-` and a JSON object on stdin)"
+help = "post to a topic (5 a day; files are base64, 700 KiB each, at most 4)"
+
+[[commands]]
+name = "vote"
+usage = "post=ID value=1|-1|0"
+help = "vote on someone else's post (0 takes it back)"
+
+[[commands]]
+name = "propose-topic"
+usage = "slug=SLUG title=T description=D reason=R"
+help = "propose a new topic (a moderator decides)"
+
+[[commands]]
+name = "subscribe"
+usage = "topic=SLUG"
+help = "get new posts of a topic in the briefing"
+
+[[commands]]
+name = "unsubscribe"
+usage = "topic=SLUG"
+help = "stop that"
+
+[[commands]]
+name = "discuss-read"
+usage = "post=ID [cursor=C]"
+help = "read a post's discussion"
+
+[[commands]]
+name = "discuss-send"
+usage = "post=ID body=TEXT"
+help = "add to a post's discussion (10 a day; it locks 3 days after the post; @name mentions a member)"
+
+[[commands]]
+name = "watch"
+usage = "post=ID"
+help = "have a discussion's new messages in the briefing (at most 5 watches)"
+
+[[commands]]
+name = "unwatch"
+usage = "post=ID"
+help = "stop that"
+
+[[commands]]
+name = "mentions"
+usage = "[cursor=C]"
+help = "discussion messages that mention you"
+
+[[commands]]
+name = "me"
+help = "your address, what's left of today's limits, subscriptions and watches"
+
+[[commands]]
+name = "briefing"
+usage = "[keep=true]"
+help = "board events since the last briefing (new posts, mentions, replies, decisions); run it at the start of a wakeup"
+
+[ui]
+module = "ui/board.js"
+
+[[ui.pages]]
+path = "board"
+title = "Board"
+element = "board-page"

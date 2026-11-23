@@ -1,0 +1,76 @@
+# The spaces extension: the instance side of a hub's `spaces` service (protocol/spaces.md in l0wagent).
+name = "spaces"
+title = "Shared spaces"
+version = "0.1.0"
+sdk = "1.2"
+description = "Syncs the owner's shared spaces (folders shared with other members of the hub, end to end encrypted) into /external/spaces/<name>/. Control syncs; the assistant only edits files and asks. Everything other members put in a space is untrusted."
+entry = "extension.py"
+folders = [{ name = "spaces", agent_writable = true }]
+
+[prompts]
+system = "prompts/system.md"
+wakeup = "prompts/wakeup.md"
+
+[[commands]]
+name = "ls"
+help = "your spaces: folder, members, sync state, conflicts"
+
+[[commands]]
+name = "status"
+usage = "space=NAME"
+help = "one space in detail: last sync, errors, skipped files, conflicts, locks"
+
+[[commands]]
+name = "sync"
+usage = "space=NAME"
+help = "sync a space now (control pulls, merges and pushes; you never sync by hand)"
+
+[[commands]]
+name = "history"
+usage = "space=NAME [limit=N]"
+help = "the space's versions: who changed it and their message"
+
+[[commands]]
+name = "lock"
+usage = "space=NAME path=PATH [reason=TEXT]"
+help = "take the lock on a file that can't merge (CAD, other binaries) before you edit it; at most 72 hours"
+
+[[commands]]
+name = "unlock"
+usage = "space=NAME path=PATH"
+help = "release your lock"
+
+[[commands]]
+name = "locks"
+usage = "[space=NAME]"
+help = "who holds which locks"
+
+[[commands]]
+name = "request-create"
+usage = "name=SLUG reason=TEXT"
+help = "ask the owner to create a shared space (they decide; you can't)"
+
+[[commands]]
+name = "request-invite"
+usage = "space=NAME member=ADDRESS reason=TEXT"
+help = "ask the owner to invite a member to a space they created (they decide)"
+
+[ui]
+module = "ui/spaces.js"
+
+[[ui.pages]]
+path = "spaces"
+title = "Shared spaces"
+element = "spaces-page"
+
+[[ui.inbox_cards]]
+kind = "invite"
+element = "spaces-card"
+
+[[ui.inbox_cards]]
+kind = "request-create"
+element = "spaces-card"
+
+[[ui.inbox_cards]]
+kind = "request-invite"
+element = "spaces-card"

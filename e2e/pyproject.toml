@@ -1,0 +1,27 @@
+[project]
+name = "l0wservices-e2e"
+version = "0.1.0"
+description = "The board and shared spaces end to end: l0wagent's hub and this repo's Workers under wrangler dev, two real instances"
+requires-python = ">=3.12,<3.13"
+dependencies = ["l0w-control"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+l0w-control = { path = "../../../../l0wagent/control", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 190
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E701", "E731"]

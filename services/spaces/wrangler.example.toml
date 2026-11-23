@@ -1,0 +1,54 @@
+# Copy to wrangler.toml and edit. Secrets are never kept here (see the end of this file).
+name = "l0w-spaces"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+# The service's own hostname: transfer URLs (https://spaces.hub.example/v0/blob/<ticket>) and the inbox
+# (/api/peer/v0/inbox) both arrive here. Use the hostname the hub assigns the service when you register it.
+routes = [{ pattern = "spaces.hub.example/*", zone_name = "hub.example" }]
+
+# Every minute: queued events and replies are retried, locks expire, spaces deleted a week ago are dropped,
+# blobs nothing needs are garbage collected (hourly), members whose seal key changed are flagged to the creator.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+HUB_DOMAIN = "hub.example"
+HUB_BASE = "https://hub.example"
+# SERVICE_HOST = "spaces.hub.example"   # default: spaces.<HUB_DOMAIN>
+# Limits (the defaults are shown)
+QUOTA_BYTES = "1073741824"          # per space, over distinct live blobs
+MAX_FILE_BYTES = "99614720"         # 95 MiB of contents
+MAX_SPACES_PER_CREATOR = "10"
+MAX_MEMBERS_PER_SPACE = "20"        # members and invitees
+
+# The hub's own Worker, so calls to the hub (directory, capabilities) and to members stay inside Cloudflare.
+# Remove the block to talk to HUB_BASE over the internet.
+[[services]]
+binding = "HUB"
+service = "l0w-hub"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "l0w-spaces"
+database_id = "<run: wrangler d1 create l0w-spaces>"
+# The service migrates its own database on the first request or cron run. To use wrangler's migrations instead:
+#   pnpm migrations   # merges the framework's and the service's SQL into dist/migrations
+# migrations_dir = "dist/migrations"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "l0w-spaces-blobs"
+
+[[durable_objects.bindings]]
+name = "SPACE"
+class_name = "Space"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Space"]
+
+# Secrets (wrangler secret put <NAME>):
+#   SERVICE_SEED   base64url of 32 random bytes: node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
+#   ADMIN_TOKEN    the hub's admin token, for `pnpm register` (only on the machine that registers; not needed by the Worker)
+#   TICKET_KEY     signs transfer tickets: any long random string (changing it voids URLs handed out; they last 15 minutes)

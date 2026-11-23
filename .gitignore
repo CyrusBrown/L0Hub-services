@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+.dev.vars
+*.log
+wrangler.toml
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+dist/
