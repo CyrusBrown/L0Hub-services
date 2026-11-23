@@ -62,7 +62,7 @@ export async function transfer(request: Request, env: SpacesEnv): Promise<Respon
   if (t.exp <= now) return reply(410, "expired", "ask for a new URL");
   const key = `${t.space}/${t.id}`;
   const lim = limits(env);
-  const release = () => inSpace(env, t.space, "ticketRelease", { mac }).catch(() => undefined);
+  const release = () => inSpace(env, t.space, "ticketRelease", put ? { mac, space: t.space, id: t.id } : { mac }).catch(() => undefined);
 
   if (!put) {
     let size: number;

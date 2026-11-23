@@ -1,5 +1,6 @@
 import { b64, docs, seal } from "@l0w/proto";
 import { beforeEach, describe, expect, it } from "vitest";
+import { UPLOAD_HOLD } from "../src/env";
 import { K, World, randomBlobId, stored, versionId, type FakeMember } from "./rig";
 
 let w: World;
@@ -379,6 +380,32 @@ describe("versions", () => {
     const res = await w.put(up.url as string, stored(50));
     expect(res.status).toBe(413);
     expect(((await res.json()) as { error: string }).error).toBe("quota_exceeded");
+  });
+
+  it("TOTAL_BYTES caps everything stored across spaces; uploads in flight count, stale ones don't", async () => {
+    w = await World.make({ TOTAL_BYTES: "250", QUOTA_BYTES: "1000" });
+    ({ mara } = w.m);
+    await w.create(mara, "t1");
+    await w.create(mara, "t2", "other");
+    expect((await w.upload(mara, "t1", randomBlobId(), stored(100))).status).toBe(201);
+    expect((await w.upload(mara, "t2", randomBlobId(), stored(100))).status).toBe(201);
+    const uploads = () => w.db.raw.prepare("SELECT space, id, size, started FROM uploads").all() as { size: number }[];
+    expect(uploads()).toEqual([]); // a committed upload's reservation is gone
+    // another space, same total: refused before anything is written
+    const res = await w.upload(mara, "t2", randomBlobId(), stored(100));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ error: "quota_exceeded" });
+    expect(uploads()).toEqual([]);
+    expect((await w.env.BLOBS.list({ prefix: "t2/" })).objects).toHaveLength(1);
+    // an upload in flight holds its bytes
+    const now = Math.floor(Date.now() / 1000);
+    w.db.raw.prepare("INSERT INTO uploads (space, id, size, started) VALUES ('t1', 'x', 40, ?)").run(now);
+    expect((await w.upload(mara, "t1", randomBlobId(), stored(40))).status).toBe(413);
+    // one that never finished stops counting after UPLOAD_HOLD, and the cron drops it
+    w.db.raw.prepare("UPDATE uploads SET started = ?").run(now - UPLOAD_HOLD - 1);
+    expect((await w.upload(mara, "t1", randomBlobId(), stored(40))).status).toBe(201);
+    await w.cron();
+    expect(uploads()).toEqual([]);
   });
 
   it("the push itself checks the quota (a lowered quota stops growth)", async () => {

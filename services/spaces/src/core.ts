@@ -2,7 +2,7 @@
 // a time per space, so a check and the write that depends on it never interleave with another caller's. Nothing here sees
 // a space key or a plaintext: it works on signed documents the Worker has already verified.
 import { ServiceError, type Obj } from "@l0wservices/core";
-import { BLOB_KEEP, DELETE_GRACE, LOCK_DEFAULT_HOURS, LOCK_MAX_HOURS, MAX_LOCKS, ORPHAN_KEEP, type Limits } from "./env";
+import { BLOB_KEEP, DELETE_GRACE, LOCK_DEFAULT_HOURS, LOCK_MAX_HOURS, MAX_LOCKS, ORPHAN_KEEP, UPLOAD_HOLD, type Limits } from "./env";
 import { lockView, SpacesDb, type LockRow, type MemberRow, type SpaceRow } from "./store";
 
 export interface Ev {
@@ -273,7 +273,7 @@ export class SpaceCore {
       if (page.objects.length) await this.blobs.delete(page.objects.map((o) => o.key));
       cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
-    const tables = ["space_members", "space_keys", "versions", "version_blobs", "blobs", "locks"];
+    const tables = ["space_members", "space_keys", "versions", "version_blobs", "blobs", "uploads", "locks"];
     await this.db.batch([...tables.map((t) => this.put(`DELETE FROM ${t} WHERE space = ?`, sp.id)), this.put("DELETE FROM spaces WHERE id = ?", sp.id)]);
     return none();
   }
@@ -322,20 +322,50 @@ export class SpaceCore {
     if (!have) {
       const stored = await this.q.storedSize(sp.id);
       if (stored + a.size > this.lim.quota) throw err("quota_exceeded", "the space is full", { size: stored, quota: this.lim.quota });
+      await this.reserve(sp.id, a.id, a.size, a.now);
     }
-    await this.claim(a.mac, a.exp);
+    try {
+      await this.claim(a.mac, a.exp);
+    } catch (e) {
+      if (!have) await this.unreserve(sp.id, a.id);
+      throw e;
+    }
     return none({ exists: !!have });
   }
 
   async cmd_blobCommit(a: { space: string; id: string; size: number; now: number }): Promise<Outcome> {
-    await this.put("INSERT OR IGNORE INTO blobs (space, id, size, created_at) VALUES (?, ?, ?, ?)", a.space, a.id, a.size, a.now).run();
+    await this.db.batch([
+      this.put("INSERT OR IGNORE INTO blobs (space, id, size, created_at) VALUES (?, ?, ?, ?)", a.space, a.id, a.size, a.now),
+      this.put("DELETE FROM uploads WHERE space = ? AND id = ?", a.space, a.id),
+    ]);
     return none();
   }
 
-  /** The upload failed after its ticket was used: give the ticket back, so the same URL can be tried again. */
-  async cmd_ticketRelease(a: { mac: string }): Promise<Outcome> {
+  /** The upload failed after its ticket was used: give the ticket back, so the same URL can be tried again (and, for an upload,
+   * its reservation against the service's total). */
+  async cmd_ticketRelease(a: { mac: string; space?: string; id?: string }): Promise<Outcome> {
     await this.put("DELETE FROM tickets WHERE mac = ?", a.mac).run();
+    if (a.space && a.id) await this.unreserve(a.space, a.id);
     return none();
+  }
+
+  /** Hold `size` bytes against the service's total (TOTAL_BYTES: what R2 may hold, all spaces together) until the upload commits or
+   * fails. One statement, so uploads to different spaces at once can't pass the total together; reservations older than
+   * UPLOAD_HOLD no longer count (the cron drops them). */
+  private async reserve(space: string, id: string, size: number, now: number): Promise<void> {
+    await this.unreserve(space, id);
+    const r = await this.db
+      .prepare(
+        "INSERT INTO uploads (space, id, size, started) SELECT ?, ?, ?, ? WHERE " +
+          "(SELECT COALESCE(SUM(size), 0) FROM blobs) + (SELECT COALESCE(SUM(size), 0) FROM uploads WHERE started > ?) + ? <= ?",
+      )
+      .bind(space, id, size, now, now - UPLOAD_HOLD, size, this.lim.total)
+      .run();
+    if (r.meta.changes !== 1) throw err("quota_exceeded", "the hub's storage for shared spaces is full", { scope: "service", quota: this.lim.total });
+  }
+
+  private async unreserve(space: string, id: string): Promise<void> {
+    await this.put("DELETE FROM uploads WHERE space = ? AND id = ?", space, id).run();
   }
 
   /** Before a download: the member still belongs, the blob is stored, and the ticket is used up. */

@@ -18,6 +18,7 @@ HUB_BASE = "https://hub.example"
 # SERVICE_HOST = "spaces.hub.example"   # default: spaces.<HUB_DOMAIN>
 # Limits (the defaults are shown)
 QUOTA_BYTES = "1073741824"          # per space, over distinct live blobs
+TOTAL_BYTES = "9000000000"          # everything in R2, all spaces together, uploads in flight included (R2's free tier is 10 GB)
 MAX_FILE_BYTES = "99614720"         # 95 MiB of contents
 MAX_SPACES_PER_CREATOR = "10"
 MAX_MEMBERS_PER_SPACE = "20"        # members and invitees

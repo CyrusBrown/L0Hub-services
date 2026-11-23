@@ -1,6 +1,6 @@
 // What runs every minute besides the framework's own work: locks that ran out, spaces deleted a week ago, blobs nothing
 // needs (hourly), transfer tickets that expired, and members whose seal key changed since their key was made.
-import { DELETE_GRACE, ORPHAN_KEEP } from "./env";
+import { DELETE_GRACE, ORPHAN_KEEP, UPLOAD_HOLD } from "./env";
 import { inSpace } from "./durable";
 import { checkRekey, sendEvents } from "./methods";
 import type { Ctx } from "./verify";
@@ -38,6 +38,7 @@ export async function cron(ctx: Ctx): Promise<void> {
 
   await step("tickets", async () => {
     await db.prepare("DELETE FROM tickets WHERE expires < ?").bind(now).run();
+    await db.prepare("DELETE FROM uploads WHERE started <= ?").bind(now - UPLOAD_HOLD).run(); // reservations of uploads that never finished
   });
 
   await step("rekey", async () => {

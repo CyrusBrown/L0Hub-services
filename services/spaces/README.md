@@ -38,6 +38,11 @@ stored form of each blob at `<space>/<blob id>`.
 - **Quota**: `size` is the bytes of stored blobs some version uses; an upload is refused once everything stored (used or not) plus
   it would pass the quota, and a push re-checks. **Max file** applies to the contents: the stored form (`0x01` + ciphertext + tag)
   may be 17 bytes longer.
+- **Total** (`TOTAL_BYTES`, default 9 GB, under R2's free 10 GB): everything the service keeps in R2, all spaces together, counting
+  blobs no version uses yet, blobs kept for history, deleted spaces in their 7 days, and uploads in flight. Each upload reserves its
+  size in one D1 statement before any byte is written (so uploads to different spaces at once can't pass it together); the
+  reservation goes when the upload commits or fails, or after 30 minutes for one that never finished. Past the total an upload is
+  `quota_exceeded` `{scope: "service", quota}` (413 on the transfer URL). Downloads, pushes and deletes still work.
 - **Removing** a member needs a new-epoch key document for every other member and invitee, bumps the epoch, drops the member's
   keys and clears all locks. Withdrawing an invitation starts no epoch (an invitee gets keys only after accepting; a pending invitee is also given a new-epoch key by the removal).
 - **GC** (hourly): an upload no version used goes after 7 days; a blob no version of the last 90 days uses goes after 90 days;

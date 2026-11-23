@@ -11,6 +11,8 @@ export interface SpacesEnv extends ServiceEnv {
   SERVICE_HOST?: string;
   /** Limits (numbers as strings, as wrangler vars are). */
   QUOTA_BYTES?: string;
+  /** Everything this service may keep in R2, all spaces together (in-flight uploads count). Default 9 GB: under R2's free 10 GB. */
+  TOTAL_BYTES?: string;
   MAX_FILE_BYTES?: string;
   MAX_SPACES_PER_CREATOR?: string;
   MAX_MEMBERS_PER_SPACE?: string;
@@ -18,6 +20,7 @@ export interface SpacesEnv extends ServiceEnv {
 
 export interface Limits {
   quota: number;
+  total: number;
   maxFile: number;
   spaces: number;
   members: number;
@@ -29,6 +32,9 @@ const num = (v: string | undefined, dflt: number): number => {
 };
 
 export const DEFAULT_QUOTA = 1024 * 1024 * 1024;
+export const DEFAULT_TOTAL = 9_000_000_000;
+/** An upload's reservation counts this long (a ticket lasts TICKET_TTL; the transfer itself may take a while after). */
+export const UPLOAD_HOLD = 2 * 15 * 60;
 export const DEFAULT_MAX_FILE = 95 * 1024 * 1024;
 export const MAX_BLOBS_MISSING = 500;
 /** The stored form of a blob is `0x01` + ciphertext + 16-byte tag: this much longer than the contents. */
@@ -44,6 +50,7 @@ export const MAX_LOCKS = 200;
 export function limits(env: Partial<SpacesEnv>): Limits {
   return {
     quota: num(env.QUOTA_BYTES, DEFAULT_QUOTA),
+    total: num(env.TOTAL_BYTES, DEFAULT_TOTAL),
     maxFile: num(env.MAX_FILE_BYTES, DEFAULT_MAX_FILE),
     spaces: num(env.MAX_SPACES_PER_CREATOR, 10),
     members: num(env.MAX_MEMBERS_PER_SPACE, 20),
