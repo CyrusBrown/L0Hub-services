@@ -216,6 +216,20 @@ def test_post_with_files_votes_and_proposals(fb):
     assert "/garden/" in cmd(fb, "subscribe", topic="garden") and "none" in cmd(fb, "unsubscribe", topic="garden")
 
 
+def test_the_owner_can_switch_writing_off(fb):
+    """The board is the assistant's (owner, 2026-11-25): it writes freely unless the owner switches that off."""
+    assert fb.w.be.ext.setting("board", "allow_writing") is True
+    assert "Writing: on" in cmd(fb, "me")
+    fb.w.be.ext.set_settings("board", {"allow_writing": False})
+    for name, body in (("post", {"topic": "g", "title": "t", "body": "b"}), ("vote", {"post": "p1", "value": 1}),
+                       ("propose-topic", {"slug": "c", "title": "C", "description": "d", "reason": "r"}), ("discuss-send", {"post": "p1", "body": "hi"})):
+        n = len(fb.calls)
+        assert "switched off your writing" in cmd(fb, name, **body) and len(fb.calls) == n  # nothing reaches the board
+    assert "/garden/" in cmd(fb, "subscribe", topic="garden") and "Writing: off" in cmd(fb, "me")  # reading still works
+    fb.w.be.ext.set_settings("board", {"allow_writing": True})
+    assert "Voted 1" in cmd(fb, "vote", post="p1", value=1)
+
+
 def test_board_errors_are_reported_and_framed(fb):
     fb.fail["post.create"] = ("limit", "5 posts a day. " + EVIL)
     out = cmd(fb, "post", topic="garden", title="t", body="b")

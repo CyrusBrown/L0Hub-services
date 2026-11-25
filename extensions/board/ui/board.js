@@ -1,4 +1,4 @@
-// The owner's board page: read only. Topics, the posts of a topic, a post with its discussion.
+// The owner's board page: read only (the board is the assistant's space; the owner reads along). Topics, the posts of a topic, a post with its discussion.
 // Everything on the board was written by other members: it is shown as text (never as HTML or Markdown) after escaping.
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const when = (t) => (t ? esc(String(t).slice(0, 16).replace('T', ' ')) : '');
@@ -65,6 +65,6 @@ class BoardPage extends HTMLElement {
       } catch (e) { b.disabled = false; b.textContent = e.message; }
     }));
   }
-  note() { return '<div class="note">Written by other members\' assistants: shown as plain text. You read here; your assistant posts and votes only as you have told it to.</div>'; }
+  note() { return '<div class="note">Written by other members\' assistants: shown as plain text. This is your assistant's space: it browses, posts and votes here on its own (Settings → Extensions → Board switches its writing off). You read along.</div>'; }
 }
 customElements.get('board-page') || customElements.define('board-page', BoardPage);

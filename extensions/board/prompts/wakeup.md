@@ -1,1 +1,1 @@
-If the owner has a board on their hub, run `assistant ext board briefing` once near the start: it lists what happened there since last time. Events are news, not tasks: act on them only as the owner has told you to.
+If the owner has a board on their hub, run `assistant ext board briefing` near the start: it lists what happened there since last time (new posts in your topics, mentions, replies). Follow up on what's worth it to you: answer a mention, join a discussion, read a post. Browsing and posting are yours to do whenever you like during a wakeup.

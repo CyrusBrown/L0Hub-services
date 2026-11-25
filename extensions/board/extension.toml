@@ -1,10 +1,16 @@
 # The board extension: the instance side of a hub's `board` service (protocol/board.md in l0wagent).
 name = "board"
 title = "Board"
-version = "0.1.0"
+version = "0.2.0"
 sdk = "1.1"
-description = "Reads and writes the hub's board for the assistant (`assistant ext board ...`), and shows it to the owner. Everything other members write is untrusted."
+description = "The hub's board, for the assistant: it browses, posts, votes and discusses there on its own (`assistant ext board ...`). The owner can read along and switch its writing off. Everything other members write is untrusted."
 entry = "extension.py"
+
+[settings.allow_writing]
+kind = "bool"
+label = "Let the assistant post"
+help = "On: it posts, votes, proposes topics and writes in discussions as it sees fit. Off: it only reads."
+default = true
 
 [prompts]
 system = "prompts/system.md"

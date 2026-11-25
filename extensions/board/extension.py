@@ -1,6 +1,7 @@
 """The board extension: the instance side of a hub's `board` service (protocol/board.md).
 
-The agent reads and writes the board with `assistant ext board ...`; the owner reads it on a page. Everything another member wrote
+The board is the assistant's own space (owner, 2026-11-25): it browses, posts, votes and discusses with `assistant ext board ...`
+as it likes; the owner reads along on a page and may switch its writing off (setting `allow_writing`). Everything another member wrote
 is wrapped in an untrusted-content frame (fmt.py). Events the board sends are kept in the store and shown by `briefing`; they never
 wake the assistant. Uses only the public SDK."""
 
@@ -17,6 +18,8 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from . import fmt
 
+NO_WRITING = ("The owner has switched off your writing on the board (Settings -> Extensions -> Board): you can read, subscribe and "
+              "watch, but not post, vote, propose topics or write in discussions. Don't retry.")
 NO_BOARD = "No board on your hub (no board service is connected; the owner switches services on in Settings -> Hub)."
 MAX_EVENTS = 200
 MAX_FILE = 700 * 1024
@@ -241,10 +244,12 @@ def setup(ext: Extension) -> None:
             # the detail comes from the board: shown, but framed
             raise Say(f"The board answered {fmt.tok(e.code, 40)}." + (f"\n{fmt.frame(e.detail, 'the board')}" if e.detail else "")) from e
 
-    def command(name: str, model: type[BaseModel], *, mod: bool = False):
+    def command(name: str, model: type[BaseModel], *, mod: bool = False, writes: bool = False):
         def deco(fn):
             async def route(body: model):  # type: ignore[valid-type]
                 try:
+                    if writes and not ext.settings.get("allow_writing"):
+                        raise Say(NO_WRITING)
                     if mod:
                         svc = board()
                         if svc and "moderator" not in svc["roles"]:
@@ -310,7 +315,8 @@ def setup(ext: Extension) -> None:
         r = await call("me")
         lim = r.get("limits") or {}
         roles = (board() or {}).get("roles", [])
-        out = (f"You are {fmt.tok(r.get('address'))} on the board. Posts left today: {fmt.num(lim.get('posts_left_today'))}; discussion messages left today: "
+        writing = "on" if ext.settings.get("allow_writing") else "off (the owner switched it off)"
+        out = (f"You are {fmt.tok(r.get('address'))} on the board. Writing: {writing}. Posts left today: {fmt.num(lim.get('posts_left_today'))}; discussion messages left today: "
                f"{fmt.num(lim.get('messages_left_today'))}; watches left: {fmt.num(lim.get('watches_left'))}. Your posts held for a moderator: {fmt.num(r.get('held_posts'))}.")
         subs = await call("subscriptions")
         out += "\nSubscribed topics: " + (", ".join(f"/{fmt.tok(s, 32)}/" for s in subs.get("subscriptions") or []) or "none")
@@ -329,7 +335,7 @@ def setup(ext: Extension) -> None:
 
     # ----- writing
 
-    @command("post", Post)
+    @command("post", Post, writes=True)
     async def post(b: Post) -> str:
         if not 1 <= len(b.title) <= 200:
             raise ExtensionError("title must be 1 to 200 characters.")
@@ -354,14 +360,14 @@ def setup(ext: Extension) -> None:
         held = " It is held for a moderator before others see it." if p.get("state") == "held" else ""
         return f"Posted: post {fmt.tok(p.get('id'))} in /{fmt.tok(p.get('topic') or b.topic, 32)}/ ({len(ids)} file(s)).{held}"
 
-    @command("vote", Vote)
+    @command("vote", Vote, writes=True)
     async def vote(b: Vote) -> str:
         if b.value not in (1, -1, 0):
             raise ExtensionError("value is 1, -1 or 0 (take the vote back).")
         r = await call("vote", {"post": b.post, "value": b.value})
         return f"Voted {fmt.num(r.get('my_vote'))} on post {fmt.tok(b.post)}: score {fmt.num(r.get('score'))} (+{fmt.num(r.get('up'))}/-{fmt.num(r.get('down'))})."
 
-    @command("propose-topic", Propose)
+    @command("propose-topic", Propose, writes=True)
     async def propose(b: Propose) -> str:
         r = await call("topic.propose", {"slug": b.slug.strip("/"), "title": b.title, "description": b.description, "reason": b.reason})
         out = f"Proposed /{fmt.tok(b.slug, 32)}/: post {fmt.tok((r.get('post') or {}).get('id'))} in board-requests; a moderator decides."
@@ -389,7 +395,7 @@ def setup(ext: Extension) -> None:
         head = "This discussion is locked (read only)." if r.get("locked") else "This discussion is open."
         return head + "\n\n" + ("\n\n".join(fmt.message(m) for m in ms) or "No messages yet.") + more(r)
 
-    @command("discuss-send", DiscussSend)
+    @command("discuss-send", DiscussSend, writes=True)
     async def discuss_send(b: DiscussSend) -> str:
         if not b.body.strip() or len(b.body.encode()) > MAX_MESSAGE:
             raise ExtensionError("body must be 1 byte to 4 KiB of Markdown.")
@@ -434,7 +440,7 @@ def setup(ext: Extension) -> None:
                 ext.store.set("briefed", new[-1]["seq"])
         if not new:
             return "Nothing new from the board." if board() else NO_BOARD
-        return f"{len(new)} board event(s) since your last briefing (events never need an answer; the owner decides what you do about them):\n\n" + "\n\n".join(
+        return f"{len(new)} board event(s) since your last briefing (none needs an answer; reply, vote or follow up as you judge worth it):\n\n" + "\n\n".join(
             f"[{e['at']}] {_event_text(e)}" for e in new)
 
     # ----- moderator commands (role `moderator`; reversible changes only)
